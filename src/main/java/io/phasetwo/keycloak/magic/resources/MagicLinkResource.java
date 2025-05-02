@@ -17,6 +17,8 @@ import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
 
+import static io.phasetwo.keycloak.magic.MagicLink.MAGIC_LINK;
+
 @JBossLog
 public class MagicLinkResource extends AbstractAdminResource {
 
@@ -58,7 +60,7 @@ public class MagicLinkResource extends AbstractAdminResource {
             forceCreate,
             updateProfile,
             updatePassword,
-            MagicLink.registerEvent(event));
+            MagicLink.registerEvent(event, MAGIC_LINK));
     if (user == null)
       throw new NotFoundException(
           String.format(
@@ -73,6 +75,8 @@ public class MagicLinkResource extends AbstractAdminResource {
             rep.getScope(),
             rep.getNonce(),
             rep.getState(),
+            rep.getCodeChallenge(),
+            rep.getCodeChallengeMethod(),
             rep.getRememberMe(),
             rep.getActionTokenPersistent());
     String link = MagicLink.linkFromActionToken(session, realm, token);
