@@ -1,9 +1,20 @@
-name: Create New Release
+name: Build Release
 
 on:
-  push:
-    tags:
-      - 'v*' # Triggers when a tag starting with 'v' is pushed
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build release from (e.g., v0.26)'
+        required: true
+        type: string
+      draft:
+        description: 'Create as draft release'
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -11,6 +22,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
         
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -33,9 +46,10 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.tag }}
           files: ${{ steps.find-jar.outputs.jar_path }}
-          name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+          name: Release ${{ github.event.inputs.tag }}
+          draft: ${{ github.event.inputs.draft }}
+          prerelease: ${{ github.event.inputs.prerelease }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
