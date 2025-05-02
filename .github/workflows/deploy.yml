@@ -35,19 +35,32 @@ jobs:
       - name: Build with Maven
         run: mvn clean install
       
-      - name: Find JAR file
-        id: find-jar
+      - name: Find and rename JAR file
+        id: rename-jar
         run: |
-          JAR_PATH=$(find target/ -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" -not -name "*-tests.jar" | head -n 1)
-          echo "jar_path=$JAR_PATH" >> $GITHUB_OUTPUT
-          echo "jar_name=$(basename $JAR_PATH)" >> $GITHUB_OUTPUT
+          # Find the original JAR
+          ORIGINAL_JAR=$(find target/ -name "*.jar" -not -name "*-sources.jar" -not -name "*-javadoc.jar" -not -name "*-tests.jar" | head -n 1)
+          
+          # Define the target name
+          RENAMED_JAR="target/keycloak-magic-link.jar"
+          
+          # Copy the JAR with the new name
+          cp "$ORIGINAL_JAR" "$RENAMED_JAR"
+          
+          # Output the paths
+          echo "original_jar_path=$ORIGINAL_JAR" >> $GITHUB_OUTPUT
+          echo "renamed_jar_path=$RENAMED_JAR" >> $GITHUB_OUTPUT
+          
+          # For debugging
+          echo "Original JAR: $ORIGINAL_JAR"
+          echo "Renamed JAR: $RENAMED_JAR"
       
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag }}
-          files: ${{ steps.find-jar.outputs.jar_path }}
+          files: ${{ steps.rename-jar.outputs.renamed_jar_path }}
           name: Release ${{ github.event.inputs.tag }}
           draft: ${{ github.event.inputs.draft }}
           prerelease: ${{ github.event.inputs.prerelease }}
