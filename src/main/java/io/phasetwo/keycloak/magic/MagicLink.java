@@ -1,6 +1,7 @@
 package io.phasetwo.keycloak.magic;
 
 import static org.keycloak.authentication.authenticators.browser.AbstractUsernameFormAuthenticator.ATTEMPTED_USERNAME;
+import static org.keycloak.models.utils.KeycloakModelUtils.findUserByNameOrEmail;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -86,21 +87,26 @@ public class MagicLink {
   public static UserModel getOrCreate(
       KeycloakSession session,
       RealmModel realm,
-      String email,
+      String emailOrUsername,
       boolean forceCreate,
       boolean updateProfile,
       boolean updatePassword,
       Consumer<UserModel> onNew) {
-    UserModel user = null;
-    if (realm.isLoginWithEmailAllowed()) {
-      user = KeycloakModelUtils.findUserByNameOrEmail(session, realm, email);
-    } else {
-      user = session.users().getUserByEmail(realm, email);
+
+    // username or email is required, if not provided or empty, exit early and return null
+    if (trimToNull(emailOrUsername) == null) {
+      return null;
     }
-    if (user == null && forceCreate && realm.isLoginWithEmailAllowed()) {
-      user = session.users().addUser(realm, email);
+    UserModel user = findUserByNameOrEmail(session, realm, emailOrUsername);
+    // If the user does not exist, we create it ONLY if forceCreate is true
+    if (user == null && forceCreate) {
+      user = session.users().addUser(realm, emailOrUsername);
       user.setEnabled(true);
-      user.setEmail(email);
+
+      if (MagicLink.isValidEmail(emailOrUsername)) {
+        user.setEmail(emailOrUsername);
+      }
+
       if (onNew != null) {
         onNew.accept(user);
       }
@@ -158,9 +164,10 @@ public class MagicLink {
     String codeChallenge = authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_PARAM);
     String codeChallengeMethod =
         authSession.getClientNote(OIDCLoginProtocol.CODE_CHALLENGE_METHOD_PARAM);
+    String responseMode = authSession.getClientNote(OIDCLoginProtocol.RESPONSE_MODE_PARAM);
     log.debugf(
         "Attempting MagicLinkAuthenticator for %s, %s, %s", user.getEmail(), clientId, redirectUri);
-    log.debugf("MagicLinkAuthenticator extra vars %s %s %s %b", scope, state, nonce, rememberMe);
+    log.debugf("MagicLinkAuthenticator extra vars %s %s %s %b %s", scope, state, nonce, rememberMe, responseMode);
     return createActionToken(
         user,
         clientId,
@@ -172,7 +179,8 @@ public class MagicLink {
         codeChallenge,
         codeChallengeMethod,
         rememberMe,
-        isActionTokenPersistent);
+        isActionTokenPersistent,
+        responseMode);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -197,7 +205,8 @@ public class MagicLink {
         codeChallenge,
         codeChallengeMethod,
         rememberMe,
-        true);
+        true,
+        null);
   }
 
   public static MagicLinkActionToken createActionToken(
@@ -211,7 +220,8 @@ public class MagicLink {
       String codeChallenge,
       String codeChallengeMethod,
       Boolean rememberMe,
-      Boolean isActionTokenPersistent) {
+      Boolean isActionTokenPersistent,
+      String responseMode) {
     // build the action token
     int validityInSecs = validity.orElse(60 * 60 * 24); // 1 day
     int absoluteExpirationInSecs = Time.currentTime() + validityInSecs;
@@ -227,14 +237,26 @@ public class MagicLink {
             codeChallenge,
             codeChallengeMethod,
             rememberMe,
-            isActionTokenPersistent);
+            isActionTokenPersistent,
+            responseMode);
     return token;
   }
 
   public static MagicLinkActionToken createActionToken(
       UserModel user, String clientId, String redirectUri, OptionalInt validity) {
     return createActionToken(
-        user, clientId, redirectUri, validity, null, null, null, null, null, false, true);
+            user,
+            clientId,
+            redirectUri,
+            validity,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            true,
+            null);
   }
 
   public static String linkFromActionToken(
